@@ -82,6 +82,83 @@ Avoid. Use only at the 500-resource CloudFormation limit.
 
 ---
 
+## Naming
+
+### Casing rules
+
+| Thing | Casing | Example |
+| --- | --- | --- |
+| Construct IDs | PascalCase | `'UserUploadsBucket'` |
+| Stack construct IDs | PascalCase | `'FoundationStack'` |
+| Stage construct IDs | PascalCase | `'Prod'`, `'Dev'` |
+| Explicit `stackName` prop | kebab-case | `'my-service-prod'` |
+| Explicit physical names (`bucketName`, etc.) | kebab-case | `'mycompany-uploads-prod'` |
+| Tag keys | kebab-case with optional `org:` prefix | `'mycompany:environment'` |
+| Export names | Namespaced PascalCase | `'MyApp-Prod-VpcId'` |
+
+### Construct IDs
+
+Use PascalCase. Must be unique within their parent scope. This is the single input you control — everything downstream (logical ID, physical name) is derived from it.
+
+```
+Construct ID:   'UserUploads'
+     ↓
+Logical ID:     UserUploads4DD88B4F       (CDK-generated, in CloudFormation template)
+     ↓
+Physical Name:  prod-stack-useruploads4dd88b4f-a1b2c3  (CloudFormation-generated)
+```
+
+**Changing a construct ID changes the logical ID, which causes CloudFormation to replace the resource. For stateful resources (databases, buckets, queues with data), this means data loss.**
+
+### The `'Default'` ID trick
+
+When wrapping an existing resource in a custom construct, use `'Default'` as the inner construct ID. CDK strips `'Default'` from the logical ID calculation, preserving the original logical ID and preventing resource replacement.
+
+```typescript
+// Before: new s3.Bucket(this, 'DataBucket')  →  logical ID: DataBucket<hash>
+
+// After wrapping — safe, same logical ID:
+class DataPipeline extends Construct {
+  constructor(scope: Construct, id: string) {
+    super(scope, id);
+    new s3.Bucket(this, 'Default');  // 'Default' is stripped from logical ID
+  }
+}
+new DataPipeline(this, 'DataBucket');  // →  logical ID: DataBucket<hash> (unchanged)
+```
+
+### Physical resource names
+
+**Do not set explicit physical names** (`bucketName`, `tableName`, `functionName`) unless required. Let CloudFormation auto-generate them.
+
+Hardcoded names:
+- Block resource replacement (new resource fails with `AlreadyExists` while old one still holds the name)
+- Prevent deploying the same stack twice in one account (name collisions)
+- Cause deployment deadlocks requiring manual intervention
+
+Set explicit names only when:
+- External systems require a known, fixed name
+- The name IS the configuration (Route53 hosted zones, custom domains)
+- Resources are shared cross-account and ARN stability matters
+
+Use `PhysicalName.GENERATE_IF_NEEDED` for cross-environment references where CDK needs a deterministic name but you don't want to choose one.
+
+### Stage names
+
+Use short PascalCase environment names: `Dev`, `Staging`, `Prod` (or `Beta`, `Gamma`, `Prod`). The stage ID auto-prefixes all child stack names: `Prod-FoundationStack`, `Prod-AppStack`.
+
+### Actions that change logical IDs (cause resource replacement)
+
+- Renaming a construct ID
+- Wrapping a resource in a new parent construct (without using `'Default'`)
+- Renaming a parent construct
+- Moving a stack into or out of a Stage
+- Changing the stack construct ID
+
+Always run `cdk diff` before deploying to catch unexpected logical ID changes on stateful resources.
+
+---
+
 ## Constructs
 
 - Start with **L2** constructs. Drop to **L1** (`Cfn*`) only when L2 doesn't expose a needed property.
