@@ -1,3 +1,8 @@
+---
+name: cdk
+description: Rules and conventions for writing, reviewing, or modifying AWS CDK TypeScript infrastructure code
+---
+
 # AWS CDK (TypeScript) — Rules and Conventions
 
 Follow these rules when writing, reviewing, or modifying AWS CDK TypeScript code.
